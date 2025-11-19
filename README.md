@@ -1,19 +1,84 @@
-# 🎈 Blank app template
+# 涨停板股票分析看板
 
-A simple Streamlit app template for you to modify!
+一个基于Streamlit的涨停板股票分析看板，提供实时股票数据分析和可视化功能。
 
-[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://blank-app-template.streamlit.app/)
+## 功能特性
 
-### How to run it on your own machine
+### 📊 核心分析功能
+1. **每日涨停连板梯队表** - 展示最新交易日的涨停股票排名
+2. **连板高度折线图** - 追踪每日最高连板高度趋势
+3. **晋级率折线图** - 分析股票连板晋级成功率
+4. **涨停成功率** - 监控每日涨停封板成功率
+5. **市场情绪指数** - 综合计算的市场情绪指标
 
-1. Install the requirements
+### 🔧 技术特性
+- **实时数据连接** - 直连MySQL数据库获取最新数据
+- **智能缓存** - 5分钟数据缓存，提升性能
+- **交互式筛选** - 支持日期范围、行业筛选
+- **响应式设计** - 适配不同屏幕尺寸
+- **可视化图表** - 使用Plotly创建交互式图表
 
-   ```
-   $ pip install -r requirements.txt
-   ```
+## 安装和运行
 
-2. Run the app
+### 环境要求
+- Python 3.7+
+- MySQL数据库连接
 
-   ```
-   $ streamlit run streamlit_app.py
-   ```
+### 快速启动
+```bash
+# 克隆或下载项目后，执行：
+./run_dashboard.sh
+```
+
+### 手动安装
+```bash
+# 安装依赖
+pip install -r requirements.txt
+
+# 运行应用
+streamlit run stock_dashboard_v2.py
+```
+
+## 情绪值计算说明
+
+市场情绪指数采用多因子权重计算：
+
+1. **涨停数量权重 (30%)** - 每日涨停股票数量占比
+2. **连板高度权重 (25%)** - 最高连板高度得分  
+3. **封板成功率权重 (25%)** - 成功封板股票占比
+4. **换手率活跃度权重 (20%)** - 平均真实换手率
+
+**情绪区间划分：**
+- 80-100: 极度乐观
+- 60-80: 乐观  
+- 40-60: 中性
+- 20-40: 悲观
+- 0-20: 极度悲观
+
+## 数据库配置
+
+默认数据库连接信息已配置在`stock_dashboard.py`中：
+- Host: mysql-tt.dingteam.com
+- Database: dingteam_ops
+- 其他连接参数请查看配置文件
+
+## 使用说明
+
+1. **启动应用**后，系统会自动连接数据库加载最新30天的股票数据
+2. **侧边栏筛选**可以按日期范围和行业进行数据筛选
+3. **图表交互**支持缩放、平移、悬停查看详细数据
+4. **数据概览**显示核心统计指标
+
+## 注意事项
+
+- 确保数据库连接正常，网络通畅
+- 数据缓存5分钟，如需实时数据请重启应用
+- 情绪值计算基于历史数据，仅供参考
+
+## 技术支持
+
+如有问题，请检查：
+1. 数据库连接配置是否正确
+2. 网络连接是否稳定
+3. Python依赖是否完整安装
+4. Streamlit服务是否正常启动
