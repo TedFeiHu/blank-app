@@ -27,6 +27,8 @@ def get_stock_data():
             name,
             code,
             price,
+            first_price,
+            last_price,
             volume,
             turnover_rate,
             real_turnover_rate,
@@ -81,14 +83,14 @@ def calculate_premium_rates(df):
             pd.notna(current_row['limit_up_days'])):  # 确保当天是涨停股票
             
             # 计算第二天开盘价溢价率 (这里用当日收盘价作为开盘价近似)
-            next_day_open_price = next_row['price']
+            next_day_open_price = next_row['first_price']
             limit_up_price = current_row['price']
             
             # 第二天开盘价溢价率 = (次日开盘价 - 涨停价) / 涨停价 * 100%
             opening_premium_rate = ((next_day_open_price - limit_up_price) / limit_up_price) * 100
             
             # 第二天收盘价较前一天涨停价溢价率
-            next_day_close_price = next_row['price']
+            next_day_close_price = next_row['last_price']
             closing_premium_rate = ((next_day_close_price - limit_up_price) / limit_up_price) * 100
             
             premium_data.append({
@@ -642,51 +644,51 @@ def main():
     create_chart_with_date_filter("晋级率趋势", df, create_advancement_rate_chart)
     
     # 涨停池，涨停率趋势
-    # def create_success_rate_chart(filtered_df):
-    #     daily_success_rate = []
+    def create_success_rate_chart(filtered_df):
+        daily_success_rate = []
         
-    #     for date in filtered_df['date'].unique():
-    #         day_data = filtered_df[filtered_df['date'] == date]
-    #         touched_limit = len(day_data[day_data['limit_up_days'].notna()])
+        for date in filtered_df['date'].unique():
+            day_data = filtered_df[filtered_df['date'] == date]
+            touched_limit = len(day_data[day_data['limit_up_days'].notna()])
             
-    #         if touched_limit > 0:
-    #             success_count = len(day_data)
-    #             success_rate = (touched_limit / success_count) * 100
-    #         else:
-    #             success_rate = 0
+            if touched_limit > 0:
+                success_count = len(day_data)
+                success_rate = (touched_limit / success_count) * 100
+            else:
+                success_rate = 0
             
-    #         daily_success_rate.append({
-    #             'date': pd.to_datetime(date).date(),
-    #             'success_rate': success_rate
-    #         })
+            daily_success_rate.append({
+                'date': pd.to_datetime(date).date(),
+                'success_rate': success_rate
+            })
         
-    #     success_rate_df = pd.DataFrame(daily_success_rate)
-    #     success_rate_df = success_rate_df.sort_values('date', ascending=True).reset_index(drop=True)
+        success_rate_df = pd.DataFrame(daily_success_rate)
+        success_rate_df = success_rate_df.sort_values('date', ascending=True).reset_index(drop=True)
         
-    #     success_rate_df['date_str'] = success_rate_df['date'].astype(str)
-    #     _ticks = success_rate_df['date_str'].tolist()
-    #     _tickvals_5 = [_ticks[i] for i in range(0, len(_ticks), 5)]
-    #     if len(_ticks) > 0 and _ticks[-1] not in _tickvals_5:
-    #         _tickvals_5.append(_ticks[-1])
-    #     fig = px.line(
-    #         success_rate_df,
-    #         x='date_str',
-    #         y='success_rate',
-    #         title='涨停率趋势',
-    #         labels={'date_str': '日期', 'success_rate': '成功率(%)'}
-    #     )
-    #     fig.update_xaxes(
-    #         type='category',
-    #         categoryorder='array',
-    #         categoryarray=success_rate_df['date_str'],
-    #         tickmode='array',
-    #         tickvals=_tickvals_5,
-    #         ticktext=_tickvals_5
-    #     )
-    #     fig.update_layout(height=400)
-    #     st.plotly_chart(fig, use_container_width=True, config=DEFAULT_PLOTLY_CONFIG, key="success_rate_chart")
+        success_rate_df['date_str'] = success_rate_df['date'].astype(str)
+        _ticks = success_rate_df['date_str'].tolist()
+        _tickvals_5 = [_ticks[i] for i in range(0, len(_ticks), 5)]
+        if len(_ticks) > 0 and _ticks[-1] not in _tickvals_5:
+            _tickvals_5.append(_ticks[-1])
+        fig = px.line(
+            success_rate_df,
+            x='date_str',
+            y='success_rate',
+            title='涨停率趋势',
+            labels={'date_str': '日期', 'success_rate': '成功率(%)'}
+        )
+        fig.update_xaxes(
+            type='category',
+            categoryorder='array',
+            categoryarray=success_rate_df['date_str'],
+            tickmode='array',
+            tickvals=_tickvals_5,
+            ticktext=_tickvals_5
+        )
+        fig.update_layout(height=400)
+        st.plotly_chart(fig, use_container_width=True, config=DEFAULT_PLOTLY_CONFIG, key="success_rate_chart")
     
-    # create_chart_with_date_filter("涨停率趋势", df, create_success_rate_chart)
+    create_chart_with_date_filter("涨停率趋势", df, create_success_rate_chart)
     
     # 5. 市场情绪指数
     def create_sentiment_chart(filtered_df):
