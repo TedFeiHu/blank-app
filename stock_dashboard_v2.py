@@ -7,6 +7,8 @@ import plotly.express as px
 import streamlit as st
 from sqlalchemy import create_engine
 
+DEFAULT_PLOTLY_CONFIG = {'displayModeBar': True, 'displaylogo': False}
+
 warnings.filterwarnings('ignore')
 
 
@@ -368,7 +370,7 @@ def main():
     else:
         st.info(f"{selected_date} 暂无涨停股票数据")
     
-    # 2. 连板高度趋势
+    # 连板高度趋势
     def create_continuous_height_chart(filtered_df):
         # 获取每日最高连板高度
         daily_max_continuous = filtered_df.groupby('date')['limit_up_days'].max().reset_index()
@@ -429,11 +431,75 @@ def main():
         )
         
         fig.update_layout(height=400)
-        st.plotly_chart(fig, width='stretch', key="continuous_height_chart")
+        st.plotly_chart(fig, use_container_width=True, config=DEFAULT_PLOTLY_CONFIG, key="continuous_height_chart")
     
     create_chart_with_date_filter("连板高度趋势", df, create_continuous_height_chart)
     
-    # 3. 晋级率趋势
+    # 涨停数量趋势
+    def create_limit_up_counts_chart(filtered_df):
+        if filtered_df.empty:
+            st.info("暂无数据")
+            return
+        dates = sorted(filtered_df['date'].unique())
+        rows = []
+        for date in dates:
+            d = filtered_df[filtered_df['date'] == date]['limit_up_days']
+            rows.append({
+                'date': pd.to_datetime(date).date(),
+                '1板': int((d == 1).sum()),
+                '2板': int((d == 2).sum()),
+                '3板': int((d == 3).sum()),
+                '4板': int((d == 4).sum()),
+                '4板以上': int((d > 4).sum()),
+                '总涨停': int(d.notna().sum())
+            })
+        counts_df = pd.DataFrame(rows)
+        counts_df['date_str'] = counts_df['date'].astype(str)
+        _ticks = counts_df['date_str'].tolist()
+        _tickvals_5 = [_ticks[i] for i in range(0, len(_ticks), 5)]
+        if len(_ticks) > 0 and _ticks[-1] not in _tickvals_5:
+            _tickvals_5.append(_ticks[-1])
+        left_col, right_col = st.columns(2)
+        with left_col:
+            fig_left = px.line(
+                counts_df,
+                x='date_str',
+                y=['1板', '总涨停'],
+                title='1板与总涨停数量趋势',
+                labels={'date_str': '日期', 'value': '数量', 'variable': '类别'}
+            )
+            fig_left.update_xaxes(
+                type='category',
+                categoryorder='array',
+                categoryarray=counts_df['date_str'],
+                tickmode='array',
+                tickvals=_tickvals_5,
+                ticktext=_tickvals_5
+            )
+            fig_left.update_layout(height=400)
+            st.plotly_chart(fig_left, use_container_width=True, config=DEFAULT_PLOTLY_CONFIG, key="limit_up_counts_left")
+        with right_col:
+            fig_right = px.line(
+                counts_df,
+                x='date_str',
+                y=['2板', '3板', '4板', '4板以上'],
+                title='2/3/4及以上涨停数量趋势',
+                labels={'date_str': '日期', 'value': '数量', 'variable': '梯队'}
+            )
+            fig_right.update_xaxes(
+                type='category',
+                categoryorder='array',
+                categoryarray=counts_df['date_str'],
+                tickmode='array',
+                tickvals=_tickvals_5,
+                ticktext=_tickvals_5
+            )
+            fig_right.update_layout(height=400)
+            st.plotly_chart(fig_right, use_container_width=True, config=DEFAULT_PLOTLY_CONFIG, key="limit_up_counts_right")
+
+    create_chart_with_date_filter("涨停数量趋势", df, create_limit_up_counts_chart)
+
+    # 晋级率趋势
     def create_advancement_rate_chart(filtered_df):
         dates = sorted(filtered_df['date'].unique())
         rows = []
@@ -567,62 +633,60 @@ def main():
                                   '<extra></extra>'
                 )
                 fig.update_layout(height=400)
-                st.plotly_chart(fig, width='stretch', key=key)
+                st.plotly_chart(fig, use_container_width=True, config=DEFAULT_PLOTLY_CONFIG, key=key)
                 table_df = df_rates[['date', col, num_col, denom_col]].copy()
                 table_df.columns = ['日期', '晋级率(%)', '分子', '分母']
                 table_df['晋级率(%)'] = table_df['晋级率(%)'].round(2)
-                st.dataframe(table_df.tail(10), width='stretch', hide_index=True)
+                st.dataframe(table_df, width='stretch', hide_index=True)
     
     create_chart_with_date_filter("晋级率趋势", df, create_advancement_rate_chart)
     
-    # 4. 涨停成功率
-    def create_success_rate_chart(filtered_df):
-        daily_success_rate = []
+    # 涨停池，涨停率趋势
+    # def create_success_rate_chart(filtered_df):
+    #     daily_success_rate = []
         
-        for date in filtered_df['date'].unique():
-            day_data = filtered_df[filtered_df['date'] == date]
-            touched_limit = len(day_data[day_data['limit_up_days'].notna()])
+    #     for date in filtered_df['date'].unique():
+    #         day_data = filtered_df[filtered_df['date'] == date]
+    #         touched_limit = len(day_data[day_data['limit_up_days'].notna()])
             
-            if touched_limit > 0:
-                success_count = len(day_data[
-                    (day_data['limit_up_days'].notna()) & 
-                    (day_data['break_count'] == 0)
-                ])
-                success_rate = (success_count / touched_limit) * 100
-            else:
-                success_rate = 0
+    #         if touched_limit > 0:
+    #             success_count = len(day_data)
+    #             success_rate = (touched_limit / success_count) * 100
+    #         else:
+    #             success_rate = 0
             
-            daily_success_rate.append({
-                'date': pd.to_datetime(date).date(),
-                'success_rate': success_rate
-            })
+    #         daily_success_rate.append({
+    #             'date': pd.to_datetime(date).date(),
+    #             'success_rate': success_rate
+    #         })
         
-        success_rate_df = pd.DataFrame(daily_success_rate)
+    #     success_rate_df = pd.DataFrame(daily_success_rate)
+    #     success_rate_df = success_rate_df.sort_values('date', ascending=True).reset_index(drop=True)
         
-        success_rate_df['date_str'] = success_rate_df['date'].astype(str)
-        _ticks = success_rate_df['date_str'].tolist()
-        _tickvals_5 = [_ticks[i] for i in range(0, len(_ticks), 5)]
-        if len(_ticks) > 0 and _ticks[-1] not in _tickvals_5:
-            _tickvals_5.append(_ticks[-1])
-        fig = px.line(
-            success_rate_df,
-            x='date_str',
-            y='success_rate',
-            title='每日涨停成功率趋势',
-            labels={'date_str': '日期', 'success_rate': '成功率(%)'}
-        )
-        fig.update_xaxes(
-            type='category',
-            categoryorder='array',
-            categoryarray=success_rate_df['date_str'],
-            tickmode='array',
-            tickvals=_tickvals_5,
-            ticktext=_tickvals_5
-        )
-        fig.update_layout(height=400)
-        st.plotly_chart(fig, width='stretch', key="success_rate_chart")
+    #     success_rate_df['date_str'] = success_rate_df['date'].astype(str)
+    #     _ticks = success_rate_df['date_str'].tolist()
+    #     _tickvals_5 = [_ticks[i] for i in range(0, len(_ticks), 5)]
+    #     if len(_ticks) > 0 and _ticks[-1] not in _tickvals_5:
+    #         _tickvals_5.append(_ticks[-1])
+    #     fig = px.line(
+    #         success_rate_df,
+    #         x='date_str',
+    #         y='success_rate',
+    #         title='涨停率趋势',
+    #         labels={'date_str': '日期', 'success_rate': '成功率(%)'}
+    #     )
+    #     fig.update_xaxes(
+    #         type='category',
+    #         categoryorder='array',
+    #         categoryarray=success_rate_df['date_str'],
+    #         tickmode='array',
+    #         tickvals=_tickvals_5,
+    #         ticktext=_tickvals_5
+    #     )
+    #     fig.update_layout(height=400)
+    #     st.plotly_chart(fig, use_container_width=True, config=DEFAULT_PLOTLY_CONFIG, key="success_rate_chart")
     
-    create_chart_with_date_filter("涨停成功率", df, create_success_rate_chart)
+    # create_chart_with_date_filter("涨停率趋势", df, create_success_rate_chart)
     
     # 5. 市场情绪指数
     def create_sentiment_chart(filtered_df):
@@ -659,7 +723,7 @@ def main():
                          annotation_text="悲观区间")
             
             fig.update_layout(height=400)
-            st.plotly_chart(fig, width='stretch', key="sentiment_chart")
+            st.plotly_chart(fig, use_container_width=True, config=DEFAULT_PLOTLY_CONFIG, key="sentiment_chart")
         else:
             st.info("暂无情绪指数数据")
     
@@ -708,7 +772,7 @@ def main():
                             line=dict(dash='dash')
                         )
                     fig_opening.update_layout(height=400)
-                    st.plotly_chart(fig_opening, width='stretch', key="opening_premium_chart")
+                    st.plotly_chart(fig_opening, config=DEFAULT_PLOTLY_CONFIG, key="opening_premium_chart")
                     
                     with col2:
                         # 第二天收盘价溢价率折线图
@@ -735,7 +799,7 @@ def main():
                             line=dict(dash='dash')
                         )
                     fig_closing.update_layout(height=400)
-                    st.plotly_chart(fig_closing, width='stretch', key="closing_premium_chart")
+                    st.plotly_chart(fig_closing, config=DEFAULT_PLOTLY_CONFIG, key="closing_premium_chart")
                     
                     # 显示统计摘要
                     col1, col2, col3, col4 = st.columns(4)
