@@ -742,24 +742,26 @@ def main():
                 daily_premium_stats = get_daily_premium_stats(premium_filtered)
                 
                 if not daily_premium_stats.empty:
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        # 第二天开盘价溢价率折线图
-                        st.subheader("📈 第二天开盘价溢价率")
                     daily_premium_stats['date_str'] = daily_premium_stats['date'].astype(str)
                     _ticks = daily_premium_stats['date_str'].tolist()
                     _tickvals_5 = [_ticks[i] for i in range(0, len(_ticks), 5)]
                     if len(_ticks) > 0 and _ticks[-1] not in _tickvals_5:
                         _tickvals_5.append(_ticks[-1])
-                    fig_opening = px.line(
-                        daily_premium_stats,
+                    long_df = daily_premium_stats.melt(
+                        id_vars=['date_str'],
+                        value_vars=['avg_opening_premium', 'avg_closing_premium'],
+                        var_name='类型',
+                        value_name='平均溢价率(%)'
+                    )
+                    fig_premium = px.line(
+                        long_df,
                         x='date_str',
-                        y='avg_opening_premium',
-                        title='涨停股票第二天开盘价平均溢价率',
-                        labels={'date_str': '涨停日期', 'avg_opening_premium': '平均溢价率(%)'}
-                        )
-                    fig_opening.update_xaxes(
+                        y='平均溢价率(%)',
+                        color='类型',
+                        title='涨停股票第二天溢价率趋势',
+                        labels={'date_str': '涨停日期', '平均溢价率(%)': '平均溢价率(%)', '类型': '类型'}
+                    )
+                    fig_premium.update_xaxes(
                         type='category',
                         categoryorder='array',
                         categoryarray=daily_premium_stats['date_str'],
@@ -767,41 +769,8 @@ def main():
                         tickvals=_tickvals_5,
                         ticktext=_tickvals_5
                     )
-                    fig_opening.add_scatter(
-                            x=daily_premium_stats['date_str'],
-                            y=daily_premium_stats['median_opening_premium'],
-                            name='中位数溢价率',
-                            line=dict(dash='dash')
-                        )
-                    fig_opening.update_layout(height=400)
-                    st.plotly_chart(fig_opening, config=DEFAULT_PLOTLY_CONFIG, key="opening_premium_chart")
-                    
-                    with col2:
-                        # 第二天收盘价溢价率折线图
-                        st.subheader("📈 第二天收盘价溢价率")
-                    fig_closing = px.line(
-                        daily_premium_stats,
-                        x='date_str',
-                        y='avg_closing_premium',
-                        title='涨停股票第二天收盘价平均溢价率',
-                        labels={'date_str': '涨停日期', 'avg_closing_premium': '平均溢价率(%)'}
-                        )
-                    fig_closing.update_xaxes(
-                        type='category',
-                        categoryorder='array',
-                        categoryarray=daily_premium_stats['date_str'],
-                        tickmode='array',
-                        tickvals=_tickvals_5,
-                        ticktext=_tickvals_5
-                    )
-                    fig_closing.add_scatter(
-                            x=daily_premium_stats['date_str'],
-                            y=daily_premium_stats['median_closing_premium'],
-                            name='中位数溢价率',
-                            line=dict(dash='dash')
-                        )
-                    fig_closing.update_layout(height=400)
-                    st.plotly_chart(fig_closing, config=DEFAULT_PLOTLY_CONFIG, key="closing_premium_chart")
+                    fig_premium.update_layout(height=400)
+                    st.plotly_chart(fig_premium, use_container_width=True, config=DEFAULT_PLOTLY_CONFIG, key="premium_combined_chart")
                     
                     # 显示统计摘要
                     col1, col2, col3, col4 = st.columns(4)
