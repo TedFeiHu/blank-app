@@ -104,7 +104,8 @@ def calculate_premium_rates(df):
                 'opening_premium_rate': opening_premium_rate,
                 'closing_premium_rate': closing_premium_rate,
                 'limit_up_days': current_row['limit_up_days'],
-                'industry': current_row['industry']
+                'industry': current_row['industry'],
+                'amplitude': current_row['amplitude']
             })
     
     return pd.DataFrame(premium_data)

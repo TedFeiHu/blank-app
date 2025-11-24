@@ -79,9 +79,8 @@ def make_stock_data(row, date):
     amplitude = round((price_max - price_min) / pre_price * 100, 2) # 振幅 %  （最高-最低）/ 昨收
 
     print('--' * 8 + '分笔数据')
-    stock_zh_a_tick_tx_js_df = pd.DataFrame()
-    if safe_get_row_value(row, '名称'):
-        stock_zh_a_tick_tx_js_df = ak.stock_zh_a_tick_tx_js(symbol=stock_type + code)
+
+    stock_zh_a_tick_tx_js_df = ak.stock_zh_a_tick_tx_js(symbol=stock_type + code)
     if stock_zh_a_tick_tx_js_df.empty:
         print(f'没有数据{code},{name}')
         # return
@@ -635,9 +634,11 @@ if __name__ == "__main__":
     target_date = f"{raw_date[:4]}-{raw_date[4:6]}-{raw_date[6:]}"  # '2025-09-19'
     # # 炸板池
     stock_zt_pool_zbgc_em_df = ak.stock_zt_pool_zbgc_em(date=raw_date)
+    print(stock_zt_pool_zbgc_em_df.shape)
     stock_zt_pool_zbgc_em_df.apply(lambda row:make_stock_data(row, target_date), axis=1)
     # 涨停池
     stock_zt_pool_em_df = ak.stock_zt_pool_em(date=raw_date)
+    print(stock_zt_pool_em_df.shape)
     stock_zt_pool_em_df.apply(lambda row:make_stock_data(row, target_date), axis=1)
 
     # 昨日涨停池数据补充
@@ -645,4 +646,5 @@ if __name__ == "__main__":
     pre_date = "2025-11-21"
     previous_limit_up_stocks = get_previous_limit_up_stocks(pre_date)
     previous_limit_up_df = pd.DataFrame(previous_limit_up_stocks)
+    print(previous_limit_up_df.shape)
     previous_limit_up_df.apply(lambda row:make_stock_data(row, target_date), axis=1)
