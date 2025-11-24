@@ -794,6 +794,89 @@ def main():
         
         create_chart_with_date_filter("溢价率分析", df, create_premium_analysis_chart)
     
+    # 7. 昨日涨停溢价成功率
+    def create_yesterday_premium_success_charts(filtered_df):
+        premium_filtered = calculate_premium_rates(filtered_df)
+        if premium_filtered.empty:
+            st.info("暂无符合条件的数据")
+            return
+        dates = sorted(premium_filtered['date'].unique())
+        open_rows = []
+        for d in dates:
+            g = premium_filtered[premium_filtered['date'] == d]
+            tot = len(g)
+            excl = g[g['amplitude'].fillna(0) > 0.5]
+            succ_tot = (g['opening_premium_rate'] > 0).sum()
+            succ_excl = (excl['opening_premium_rate'] > 0).sum()
+            r_tot = (succ_tot / tot * 100) if tot > 0 else 0
+            r_excl = (succ_excl / len(excl) * 100) if len(excl) > 0 else 0
+            open_rows.append({'date': pd.to_datetime(d).date(), '总成功率': r_tot, '排除一字成功率': r_excl})
+        close_rows = []
+        for d in dates:
+            g = premium_filtered[premium_filtered['date'] == d]
+            tot = len(g)
+            excl = g[g['amplitude'].fillna(0) > 0.5]
+            succ_tot = (g['closing_premium_rate'] > 0).sum()
+            succ_excl = (excl['closing_premium_rate'] > 0).sum()
+            r_tot = (succ_tot / tot * 100) if tot > 0 else 0
+            r_excl = (succ_excl / len(excl) * 100) if len(excl) > 0 else 0
+            close_rows.append({'date': pd.to_datetime(d).date(), '总成功率': r_tot, '排除一字成功率': r_excl})
+        open_df = pd.DataFrame(open_rows)
+        close_df = pd.DataFrame(close_rows)
+        open_df['date_str'] = open_df['date'].astype(str)
+        close_df['date_str'] = close_df['date'].astype(str)
+        _ticks_o = open_df['date_str'].tolist()
+        _tickvals_5_o = [_ticks_o[i] for i in range(0, len(_ticks_o), 5)]
+        if len(_ticks_o) > 0 and _ticks_o[-1] not in _tickvals_5_o:
+            _tickvals_5_o.append(_ticks_o[-1])
+        _ticks_c = close_df['date_str'].tolist()
+        _tickvals_5_c = [_ticks_c[i] for i in range(0, len(_ticks_c), 5)]
+        if len(_ticks_c) > 0 and _ticks_c[-1] not in _tickvals_5_c:
+            _tickvals_5_c.append(_ticks_c[-1])
+        col1, col2 = st.columns(2)
+        with col1:
+            open_long = open_df.melt(id_vars=['date_str'], value_vars=['总成功率', '排除一字成功率'], var_name='类型', value_name='成功率(%)')
+            fig_open_succ = px.line(
+                open_long,
+                x='date_str',
+                y='成功率(%)',
+                color='类型',
+                title='昨日涨停开盘溢价成功率',
+                labels={'date_str': '日期', '成功率(%)': '成功率(%)', '类型': '类型'}
+            )
+            fig_open_succ.update_xaxes(
+                type='category',
+                categoryorder='array',
+                categoryarray=open_df['date_str'],
+                tickmode='array',
+                tickvals=_tickvals_5_o,
+                ticktext=_tickvals_5_o
+            )
+            fig_open_succ.update_layout(height=400)
+            st.plotly_chart(fig_open_succ, use_container_width=True, config=DEFAULT_PLOTLY_CONFIG, key="opening_premium_success_rate_chart_v2")
+        with col2:
+            close_long = close_df.melt(id_vars=['date_str'], value_vars=['总成功率', '排除一字成功率'], var_name='类型', value_name='成功率(%)')
+            fig_close_succ = px.line(
+                close_long,
+                x='date_str',
+                y='成功率(%)',
+                color='类型',
+                title='昨日涨停收盘溢价成功率',
+                labels={'date_str': '日期', '成功率(%)': '成功率(%)', '类型': '类型'}
+            )
+            fig_close_succ.update_xaxes(
+                type='category',
+                categoryorder='array',
+                categoryarray=close_df['date_str'],
+                tickmode='array',
+                tickvals=_tickvals_5_c,
+                ticktext=_tickvals_5_c
+            )
+            fig_close_succ.update_layout(height=400)
+            st.plotly_chart(fig_close_succ, use_container_width=True, config=DEFAULT_PLOTLY_CONFIG, key="closing_premium_success_rate_chart_v2")
+
+    create_chart_with_date_filter("昨日涨停溢价成功率", df, create_yesterday_premium_success_charts)
+
     # 数据概览
     st.header("📊 数据概览")
     col1, col2, col3, col4 = st.columns(4)
