@@ -1,0 +1,74 @@
+该项目是使用streamlit搭建的一个涨停板股票分析看板项目
+
+数据存储在mysql,mysql链接信息
+'host': 'mysql-tt.dingteam.com',
+'user': 'dingteam_ops',
+'password': 'GdTtsy1qNJ0RTfgceblzUFNLS2AH5qQi',
+'database': 'dingteam_ops'
+
+表结构：
+CREATE TABLE `stock_model` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `date` date NOT NULL COMMENT '日期',
+  `name` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '股票名称',
+  `code` varchar(10) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '股票代码',
+  `market_capitalization` bigint(20) NOT NULL COMMENT '总股本',
+  `circulating_market_capitalization` bigint(20) NOT NULL COMMENT '流通股本',
+  `real_circulating_capitalization` bigint(20) NOT NULL COMMENT '真实流通股本',
+  `price` decimal(10,2) NOT NULL COMMENT '最新价',
+  `volume` bigint(20) NOT NULL COMMENT '成交量(手)',
+  `turnover_rate` decimal(5,2) NOT NULL COMMENT '换手率(%)',
+  `real_turnover_rate` decimal(5,2) NOT NULL COMMENT '真实换手率(%)',
+  `outside_volume` bigint(20) NOT NULL COMMENT '外盘',
+  `inside_volume` bigint(20) NOT NULL COMMENT '内盘',
+  `buy_1_vol` bigint(20) DEFAULT NULL COMMENT '买一量',
+  `first_volume` bigint(20) NOT NULL COMMENT '首笔成交量(手)',
+  `first_price` decimal(10,2) NOT NULL COMMENT '首笔成交价格',
+  `last_volume` bigint(20) NOT NULL COMMENT '最后一笔成交量(手)',
+  `last_price` decimal(10,2) NOT NULL COMMENT '最后一笔成交价格',
+  `first_seal_time` time DEFAULT NULL COMMENT '首次封板时间',
+  `last_seal_time` time DEFAULT NULL COMMENT '最后封板时间',
+  `first_break_time` time DEFAULT NULL COMMENT '首次炸板时间',
+  `last_break_time` time DEFAULT NULL COMMENT '最后炸板时间',
+  `break_count` int(11) NOT NULL DEFAULT '0' COMMENT '炸板次数',
+  `dc_first_seal_time` time DEFAULT NULL COMMENT '东财首次封板时间',
+  `dc_last_seal_time` time DEFAULT NULL COMMENT '东财最后封板时间',
+  `dc_break_count` int(11) NOT NULL DEFAULT '0' COMMENT '东财炸板次数',
+  `limit_up_statistics` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '涨停统计',
+  `limit_up_days` int(11) DEFAULT NULL COMMENT '连板数,为空说明当天未涨停',
+  `amplitude` decimal(5,2) DEFAULT NULL COMMENT '振幅(%)',
+  `industry` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '所属行业',
+  `events` json DEFAULT NULL COMMENT '炸板事件(JSON)',
+  PRIMARY KEY (`id`),
+  KEY `idx_code_date` (`code`,`date`),
+  KEY `idx_date` (`date`)
+) ENGINE=InnoDB AUTO_INCREMENT=2346 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='股票涨停板数据模型'
+
+目前表已经建好，并且存在数据
+
+需要实现的图表有:
+1. 每日涨停连板梯队表
+2. 连板高度折线图
+3. 晋级率折线图
+4. 每日涨停数与触及涨停数比值 折线图
+5. 每日情绪值折线图（情绪值怎么计算需要你的帮助）
+
+----
+添加需求：
+涨停板股票第二天开盘价溢价率折线图 和 第二天收盘价较 前一天涨停加溢价率折线图
+
+----
+无需侧边栏，以及时间和行业筛选控件， 将时间筛选控件移到每一个分析图表上，支持单独控制
+
+---
+1. get_stock_data 缓存5分钟变更为5小时
+2. “每日涨停连板梯队表 ” 中需要添加 涨停统计列(对应数据表中 limit_up_statistics)，该列数据格式为 num1/num2 含义为 num1天num2板，比如 10/8 就是10天8板
+3. “每日涨停连板梯队表 ” 中 “换手率”名称变更为“真实换手率”，并添加 turnover_rate(换手率)列 以做对比
+4. “每日涨停连板梯队表” 中 "封板时间" 列的数据展示为 {first_seal_time}/{dc_first_seal_time} 格式取原字符串数据，无需转换成日期格式
+
+---
+1. “每日涨停连板梯队表” 中 "封板时间" 列的数据展示为 {dc_first_seal_time} 格式化为 %H:%M:%S , 变更列名为 “首次触板时间”； 添加新列“最后封板时间” {dc_last_seal_time} 格式化为%H:%M:%S，如果数据为空展示‘’
+2. “每日涨停连板梯队表” 中 将 虽然未涨停，但limit_up_statistics 不等于 “0/0”  的数据也加入其中，连板天数记为0
+
+---
+1. "连板高度趋势" 中，在labels标签中加入 对应的股票代码和股票名称信息
