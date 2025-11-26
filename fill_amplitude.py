@@ -32,7 +32,7 @@ def get_missing_ranges(engine):
 
 def fetch_hist_df(code, start_date, end_date):
     symbol = code[-6:]
-    random_range = random.randrange(30, 60)
+    random_range = random.randrange(40, 60)
     logging.info("fetch %s [%s-%s], sleep %ds", symbol, start_date, end_date, random_range)
     time.sleep(random_range)
     df = ak.stock_zh_a_hist(symbol=symbol, period="daily", start_date=start_date, end_date=end_date, adjust="qfq")
