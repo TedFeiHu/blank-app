@@ -266,6 +266,31 @@ def main():
     # 获取选定日期的涨停股票
     selected_stocks = df[df['date'] == pd.to_datetime(selected_date).date()].copy()
     
+    # 计算每只股票近30天内的涨停板数量
+    def calculate_30day_limit_up_count(stock_code, target_date):
+        # 计算30天前的日期
+        date_obj = pd.to_datetime(target_date)
+        start_date = (date_obj - pd.Timedelta(days=29)).date()  # 包含当天，共30天
+        
+        # 筛选该股票在指定日期范围内的涨停记录
+        stock_data = df[(df['code'] == stock_code) & 
+                        (df['date'] >= start_date) & 
+                        (df['date'] <= target_date)].copy()
+        
+        # 计算涨停次数（limit_up_days不为空或limit_up_statistics表明有涨停）
+        limit_up_count = 0
+        for _, row in stock_data.iterrows():
+            # 情况1: 有连板天数记录
+            if pd.notna(row['limit_up_days']):
+                limit_up_count += 1
+            # # 情况2: 没有连板天数但有涨停统计且不为"0/0"和"2/1"
+            # elif (pd.notna(row['limit_up_statistics']) and 
+            #       row['limit_up_statistics'] != '0/0' and 
+            #       row['limit_up_statistics'] != '2/1'):
+            #     limit_up_count += 1
+        
+        return limit_up_count
+    
     # 按连板天数分组 - 包含连板天数为0但limit_up_statistics不等于"0/0"的股票
     ranking_data = []
     
@@ -311,12 +336,16 @@ def main():
                     # 如果是字符串或其他格式，直接显示
                     last_seal_time = str(stock['dc_last_seal_time']).split('.')[0]  # 去掉微秒部分
             
+            # 计算近30天涨停板数量
+            limit_up_30day_count = calculate_30day_limit_up_count(stock['code'], selected_date)
+            
             ranking_data.append({
                 '连板天数': int(days),
                 '股票代码': stock['code'],
                 '股票名称': stock['name'],
                 '当前价格': f"{stock['price']:.2f}",
                 '涨停统计': stock['limit_up_statistics'] if pd.notna(stock['limit_up_statistics']) else '',
+                '近30数量': limit_up_30day_count,
                 '换手率': f"{stock['turnover_rate']:.2f}%",  # 普通换手率
                 '真实换手率': f"{stock['real_turnover_rate']:.2f}%",  # 真实换手率
                 '首次触板时间': first_touch_time,  # 新的首次触板时间格式
@@ -329,7 +358,8 @@ def main():
     special_stocks = selected_stocks[
         (selected_stocks['limit_up_days'].isna()) & 
         (selected_stocks['limit_up_statistics'].notna()) & 
-        (selected_stocks['limit_up_statistics'] != '0/0')
+        (selected_stocks['limit_up_statistics'] != '0/0') &
+        (selected_stocks['limit_up_statistics'] != '2/1')
     ].copy()
     
     for _, stock in special_stocks.iterrows():
@@ -337,8 +367,17 @@ def main():
         first_touch_time = ''
         if pd.notna(stock['dc_first_seal_time']):
             try:
-                # 如果已经是时间格式，直接格式化
-                first_touch_time = stock['dc_first_seal_time'].strftime('%H:%M:%S')
+                # 处理timedelta格式的时间数据
+                    if hasattr(stock['dc_first_seal_time'], 'total_seconds'):
+                        # 如果是timedelta，转换为时间字符串
+                        total_seconds = int(stock['dc_first_seal_time'].total_seconds())
+                        hours = total_seconds // 3600
+                        minutes = (total_seconds % 3600) // 60
+                        seconds = total_seconds % 60
+                        first_touch_time = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+                    else:
+                        # 如果已经是时间格式，直接格式化
+                        first_touch_time = stock['dc_first_seal_time'].strftime('%H:%M:%S')
             except:
                 # 如果是字符串，直接显示
                 first_touch_time = str(stock['dc_first_seal_time'])
@@ -353,12 +392,16 @@ def main():
                 # 如果是字符串，直接显示
                 last_seal_time = str(stock['dc_last_seal_time'])
         
+        # 计算近30天涨停板数量
+        limit_up_30day_count = calculate_30day_limit_up_count(stock['code'], selected_date)
+        
         ranking_data.append({
             '连板天数': 0,  # 连板天数记为0
             '股票代码': stock['code'],
             '股票名称': stock['name'],
             '当前价格': f"{stock['price']:.2f}",
             '涨停统计': stock['limit_up_statistics'] if pd.notna(stock['limit_up_statistics']) else '',
+            '近30数量': limit_up_30day_count,
             '换手率': f"{stock['turnover_rate']:.2f}%",  # 普通换手率
             '真实换手率': f"{stock['real_turnover_rate']:.2f}%",  # 真实换手率
             '首次触板时间': first_touch_time,  # 新的首次触板时间格式
@@ -369,6 +412,100 @@ def main():
     
     if ranking_data:
         ranking_df = pd.DataFrame(ranking_data)
+        
+        # 添加多列排序功能
+        st.subheader("📋 表格排序设置")
+        
+        # 创建排序控件容器
+        sort_cols = st.columns([2, 1, 2, 1, 2])
+        
+        # 可选的排序列
+        sortable_columns = list(ranking_df.columns)
+        
+        # 初始化会话状态来存储排序配置
+        if 'sort_config' not in st.session_state:
+            st.session_state.sort_config = [
+                {'column': '连板天数', 'direction': 'descending'},
+                {'column': None, 'direction': 'ascending'},
+                {'column': None, 'direction': 'ascending'}
+            ]
+        
+        # 第一级排序
+        with sort_cols[0]:
+            st.session_state.sort_config[0]['column'] = st.selectbox(
+                "一级排序", 
+                [None] + sortable_columns, 
+                index=1 if st.session_state.sort_config[0]['column'] == '连板天数' else 
+                       sortable_columns.index(st.session_state.sort_config[0]['column']) + 1 if st.session_state.sort_config[0]['column'] in sortable_columns else 0,
+                key="sort_level1"
+            )
+        with sort_cols[1]:
+            st.session_state.sort_config[0]['direction'] = st.radio(
+                "方向", 
+                ['升序', '降序'], 
+                index=0 if st.session_state.sort_config[0]['direction'] == 'ascending' else 1,
+                horizontal=True,
+                key="sort_dir1"
+            )
+        
+        # 第二级排序
+        with sort_cols[2]:
+            st.session_state.sort_config[1]['column'] = st.selectbox(
+                "二级排序", 
+                [None] + sortable_columns, 
+                index=0 if st.session_state.sort_config[1]['column'] is None else 
+                       sortable_columns.index(st.session_state.sort_config[1]['column']) + 1,
+                key="sort_level2"
+            )
+        with sort_cols[3]:
+            st.session_state.sort_config[1]['direction'] = st.radio(
+                "方向", 
+                ['升序', '降序'], 
+                index=0 if st.session_state.sort_config[1]['direction'] == 'ascending' else 1,
+                horizontal=True,
+                key="sort_dir2"
+            )
+        
+        # 第三级排序
+        with sort_cols[4]:
+            st.session_state.sort_config[2]['column'] = st.selectbox(
+                "三级排序", 
+                [None] + sortable_columns, 
+                index=0 if st.session_state.sort_config[2]['column'] is None else 
+                       sortable_columns.index(st.session_state.sort_config[2]['column']) + 1,
+                key="sort_level3"
+            )
+        
+        # 准备排序键
+        sort_keys = []
+        for config in st.session_state.sort_config:
+            if config['column'] is not None:
+                # 对于包含百分号的列，需要特殊处理转换为数值
+                col = config['column']
+                if col in ['换手率', '真实换手率']:
+                    # 创建临时列用于排序
+                    temp_col = f"{col}_temp"
+                    ranking_df[temp_col] = ranking_df[col].str.replace('%', '').astype(float)
+                    sort_keys.append((temp_col, 'ascending' if config['direction'] == '升序' else 'descending'))
+                else:
+                    # 对于数值列，确保类型正确
+                    if col in ['连板天数', '炸板次数', '近30天涨停板数量']:
+                        ranking_df[col] = ranking_df[col].astype(int)
+                    sort_keys.append((col, 'ascending' if config['direction'] == '升序' else 'descending'))
+        
+        # 执行排序
+        if sort_keys:
+            # 提取列名和排序方向
+            sort_columns = [key[0] for key in sort_keys]
+            sort_ascending = [key[1] == 'ascending' for key in sort_keys]
+            ranking_df = ranking_df.sort_values(by=sort_columns, ascending=sort_ascending)
+            
+            # 删除临时创建的排序列
+            temp_cols = [key[0] for key in sort_keys if key[0].endswith('_temp')]
+            for temp_col in temp_cols:
+                ranking_df = ranking_df.drop(temp_col, axis=1)
+        
+        # 显示排序后的表格
         st.dataframe(ranking_df, width='stretch', hide_index=True)
     else:
         st.info(f"{selected_date} 暂无涨停股票数据")
@@ -432,9 +569,21 @@ def main():
                          '<extra></extra>',
             customdata=daily_max_continuous[['stock_info']]
         )
+        labels_text = daily_max_continuous[['stock_info']]
+        fig.add_scatter(
+            x=daily_max_continuous['date_str'],
+            y=daily_max_continuous['limit_up_days'],
+            mode='text',
+            text=labels_text,
+            textposition='top center',
+            textfont=dict(size=10, color='gray'),
+            name='股票信息',
+            hoverinfo='skip',
+            showlegend=False
+        )
         
         fig.update_layout(height=400)
-        st.plotly_chart(fig, use_container_width=True, config=DEFAULT_PLOTLY_CONFIG, key="continuous_height_chart")
+        st.plotly_chart(fig, width='stretch', config=DEFAULT_PLOTLY_CONFIG, key="continuous_height_chart")
     
     create_chart_with_date_filter("连板高度趋势", df, create_continuous_height_chart)
     
@@ -480,7 +629,7 @@ def main():
                 ticktext=_tickvals_5
             )
             fig_left.update_layout(height=400)
-            st.plotly_chart(fig_left, use_container_width=True, config=DEFAULT_PLOTLY_CONFIG, key="limit_up_counts_left")
+            st.plotly_chart(fig_left, width='stretch', config=DEFAULT_PLOTLY_CONFIG, key="limit_up_counts_left")
         with right_col:
             fig_right = px.line(
                 counts_df,
@@ -498,7 +647,7 @@ def main():
                 ticktext=_tickvals_5
             )
             fig_right.update_layout(height=400)
-            st.plotly_chart(fig_right, use_container_width=True, config=DEFAULT_PLOTLY_CONFIG, key="limit_up_counts_right")
+            st.plotly_chart(fig_right, width='stretch', config=DEFAULT_PLOTLY_CONFIG, key="limit_up_counts_right")
 
     create_chart_with_date_filter("涨停数量趋势", df, create_limit_up_counts_chart)
 
@@ -636,11 +785,19 @@ def main():
                                   '<extra></extra>'
                 )
                 fig.update_layout(height=400)
-                st.plotly_chart(fig, use_container_width=True, config=DEFAULT_PLOTLY_CONFIG, key=key)
+                st.plotly_chart(fig, width='stretch', config=DEFAULT_PLOTLY_CONFIG, key=key)
                 table_df = df_rates[['date', col, num_col, denom_col]].copy()
                 table_df.columns = ['日期', '晋级率(%)', '分子', '分母']
                 table_df['晋级率(%)'] = table_df['晋级率(%)'].round(2)
-                st.dataframe(table_df, width='stretch', hide_index=True)
+                
+                # 使用session_state跟踪展开状态，默认收起
+                expander_key = f"expander_{key}"
+                if expander_key not in st.session_state:
+                    st.session_state[expander_key] = False
+                
+                # 创建可展开/收起的表格（移除key参数以兼容低版本Streamlit）
+                with st.expander("查看详细数据", expanded=st.session_state[expander_key]):
+                    st.dataframe(table_df, width='stretch', hide_index=True)
     
     create_chart_with_date_filter("晋级率趋势", df, create_advancement_rate_chart)
     
@@ -687,7 +844,7 @@ def main():
             ticktext=_tickvals_5
         )
         fig.update_layout(height=400)
-        st.plotly_chart(fig, use_container_width=True, config=DEFAULT_PLOTLY_CONFIG, key="success_rate_chart")
+        st.plotly_chart(fig, width='stretch', config=DEFAULT_PLOTLY_CONFIG, key="success_rate_chart")
     
     create_chart_with_date_filter("涨停率趋势", df, create_success_rate_chart)
     
@@ -726,7 +883,7 @@ def main():
                          annotation_text="悲观区间")
             
             fig.update_layout(height=400)
-            st.plotly_chart(fig, use_container_width=True, config=DEFAULT_PLOTLY_CONFIG, key="sentiment_chart")
+            st.plotly_chart(fig, width='stretch', config=DEFAULT_PLOTLY_CONFIG, key="sentiment_chart")
         else:
             st.info("暂无情绪指数数据")
     
@@ -771,7 +928,7 @@ def main():
                         ticktext=_tickvals_5
                     )
                     fig_premium.update_layout(height=400)
-                    st.plotly_chart(fig_premium, use_container_width=True, config=DEFAULT_PLOTLY_CONFIG, key="premium_combined_chart")
+                    st.plotly_chart(fig_premium, width='stretch', config=DEFAULT_PLOTLY_CONFIG, key="premium_combined_chart")
                     
                     # 显示统计摘要
                     col1, col2, col3, col4 = st.columns(4)
@@ -854,7 +1011,7 @@ def main():
                 ticktext=_tickvals_5_o
             )
             fig_open_succ.update_layout(height=400)
-            st.plotly_chart(fig_open_succ, use_container_width=True, config=DEFAULT_PLOTLY_CONFIG, key="opening_premium_success_rate_chart_v2")
+            st.plotly_chart(fig_open_succ, width='stretch', config=DEFAULT_PLOTLY_CONFIG, key="opening_premium_success_rate_chart_v2")
         with col2:
             close_long = close_df.melt(id_vars=['date_str'], value_vars=['总成功率', '排除一字成功率'], var_name='类型', value_name='成功率(%)')
             fig_close_succ = px.line(
@@ -874,7 +1031,7 @@ def main():
                 ticktext=_tickvals_5_c
             )
             fig_close_succ.update_layout(height=400)
-            st.plotly_chart(fig_close_succ, use_container_width=True, config=DEFAULT_PLOTLY_CONFIG, key="closing_premium_success_rate_chart_v2")
+            st.plotly_chart(fig_close_succ, width='stretch', config=DEFAULT_PLOTLY_CONFIG, key="closing_premium_success_rate_chart_v2")
 
     create_chart_with_date_filter("昨日涨停溢价成功率", df, create_yesterday_premium_success_charts)
 

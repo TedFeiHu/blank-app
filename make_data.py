@@ -630,7 +630,7 @@ def get_previous_limit_up_stocks(date):
 
 
 if __name__ == "__main__":
-    raw_date = '20251124'  # 原始日期格式
+    raw_date = '20251126'  # 原始日期格式
     target_date = f"{raw_date[:4]}-{raw_date[4:6]}-{raw_date[6:]}"  # '2025-09-19'
     # # 炸板池
     stock_zt_pool_zbgc_em_df = ak.stock_zt_pool_zbgc_em(date=raw_date)
@@ -643,7 +643,7 @@ if __name__ == "__main__":
 
     # 昨日涨停池数据补充
     # 获取昨日涨停股票数据 时间需要手动调整
-    pre_date = "2025-11-21"
+    pre_date = "2025-11-25"
     previous_limit_up_stocks = get_previous_limit_up_stocks(pre_date)
     previous_limit_up_df = pd.DataFrame(previous_limit_up_stocks)
     print(previous_limit_up_df.shape)
