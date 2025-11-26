@@ -489,7 +489,7 @@ def main():
                     sort_keys.append((temp_col, 'ascending' if config['direction'] == '升序' else 'descending'))
                 else:
                     # 对于数值列，确保类型正确
-                    if col in ['连板天数', '炸板次数', '近30天涨停板数量']:
+                    if col in ['连板天数', '炸板次数', '近30数量']:
                         ranking_df[col] = ranking_df[col].astype(int)
                     sort_keys.append((col, 'ascending' if config['direction'] == '升序' else 'descending'))
         
