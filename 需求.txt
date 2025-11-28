@@ -118,3 +118,51 @@ code,name,market_capitalization,circulating_market_capitalization,real_circulati
 limit_up_statistics： 在前交易日的数据上 将 '3/2' 这种模式的字符串第一个数字加1，结果 '4/2'
 real_turnover_rate: volume/real_circulating_capitalization %
 ```
+
+-----
+在执行完成之后，发送工作通知，如果运行异常，也发送通知，但内容不同，以下是工作通知的接口
+-----
+获取accessToken
+POST /v1.0/oauth2/accessToken HTTP/1.1
+Host: api.dingtalk.com
+Content-Type: application/json
+Content-Length: 123
+
+{
+    "appKey":"dingnsjpwujty5kbajy6",
+    "appSecret":"wb6_CLZcjLmwNLlw65JG74L1jIQ4j4rcsXHGZVQLTi4M4GBvT-G5VUp3zXEdl0b0"
+}
+
+发送成功通知
+POST /topapi/message/corpconversation/asyncsend_v2?access_token=f2663fd99f233b08a592604479fa4f19 HTTP/1.1
+Host: oapi.dingtalk.com
+Content-Type: application/json
+Content-Length: 172
+
+{
+    "agent_id": 273568156,
+    "userid_list": "03041931481048783",
+    "msg": {
+        "msgtype": "text",
+        "text": {
+            "content": "完成"
+        }
+    }
+}
+
+发送失败通知
+POST /topapi/message/corpconversation/asyncsend_v2?access_token=f2663fd99f233b08a592604479fa4f19 HTTP/1.1
+Host: oapi.dingtalk.com
+Content-Type: application/json
+Content-Length: 172
+
+{
+    "agent_id": 273568156,
+    "userid_list": "03041931481048783",
+    "msg": {
+        "msgtype": "text",
+        "text": {
+            "content": "失败"
+        }
+    }
+}

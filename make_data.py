@@ -1,4 +1,7 @@
 import time
+import os
+import urllib.request
+import urllib.error
 
 import akshare as ak
 import pandas as pd
@@ -578,6 +581,55 @@ def save_date(data):
         connection.close()
 
 
+def dingtalk_get_access_token(app_key=None, app_secret=None):
+    app_key = 'dingnsjpwujty5kbajy6'
+    app_secret = 'wb6_CLZcjLmwNLlw65JG74L1jIQ4j4rcsXHGZVQLTi4M4GBvT-G5VUp3zXEdl0b0'
+
+    url = "https://api.dingtalk.com/v1.0/oauth2/accessToken"
+    data = json.dumps({"appKey": app_key, "appSecret": app_secret}).encode('utf-8')
+    req = urllib.request.Request(url, data=data, headers={'Content-Type': 'application/json'})
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            body = resp.read()
+            obj = json.loads(body.decode('utf-8'))
+            token = obj.get('accessToken') or obj.get('access_token')
+            return token
+    except Exception as e:
+        print(f"获取钉钉accessToken失败: {e}")
+        return None
+
+
+def dingtalk_send_text(access_token,  content):
+    if not access_token:
+        return False
+    url = f"https://oapi.dingtalk.com/topapi/message/corpconversation/asyncsend_v2?access_token={access_token}"
+    body = {
+        "agent_id": 273568156,
+        "userid_list": "03041931481048783",
+        "msg": {
+            "msgtype": "text",
+            "text": {"content": content}
+        }
+    }
+    data = json.dumps(body).encode('utf-8')
+    req = urllib.request.Request(url, data=data, headers={'Content-Type': 'application/json'})
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            resp_obj = json.loads(resp.read().decode('utf-8'))
+            if resp_obj.get('errcode', 0) == 0 or resp_obj.get('success', False):
+                return True
+            print(f"钉钉发送返回错误: {resp_obj}")
+            return False
+    except Exception as e:
+        print(f"发送钉钉消息失败: {e}")
+        return False
+
+
+def notify(message="完成"):
+    token = dingtalk_get_access_token()
+    dingtalk_send_text(token, message)
+
+
 def get_previous_limit_up_stocks(date):
     """
     从数据库获取昨日涨停的股票
@@ -630,21 +682,21 @@ def get_previous_limit_up_stocks(date):
 
 
 if __name__ == "__main__":
-    raw_date = '20251128'  # 原始日期格式
-    target_date = f"{raw_date[:4]}-{raw_date[4:6]}-{raw_date[6:]}"  # '2025-09-19'
-    # # 炸板池
-    stock_zt_pool_zbgc_em_df = ak.stock_zt_pool_zbgc_em(date=raw_date)
-    print(stock_zt_pool_zbgc_em_df.shape)
-    stock_zt_pool_zbgc_em_df.apply(lambda row:make_stock_data(row, target_date), axis=1)
-    # 涨停池
-    stock_zt_pool_em_df = ak.stock_zt_pool_em(date=raw_date)
-    print(stock_zt_pool_em_df.shape)
-    stock_zt_pool_em_df.apply(lambda row:make_stock_data(row, target_date), axis=1)
-
-    # 昨日涨停池数据补充
-    # 获取昨日涨停股票数据 时间需要手动调整
-    pre_date = "2025-11-27"
-    previous_limit_up_stocks = get_previous_limit_up_stocks(pre_date)
-    previous_limit_up_df = pd.DataFrame(previous_limit_up_stocks)
-    print(previous_limit_up_df.shape)
-    previous_limit_up_df.apply(lambda row:make_stock_data(row, target_date), axis=1)
+    try:
+        raw_date = '20251128'
+        target_date = f"{raw_date[:4]}-{raw_date[4:6]}-{raw_date[6:]}"
+        stock_zt_pool_zbgc_em_df = ak.stock_zt_pool_zbgc_em(date=raw_date)
+        print(stock_zt_pool_zbgc_em_df.shape)
+        stock_zt_pool_zbgc_em_df.apply(lambda row: make_stock_data(row, target_date), axis=1)
+        stock_zt_pool_em_df = ak.stock_zt_pool_em(date=raw_date)
+        print(stock_zt_pool_em_df.shape)
+        stock_zt_pool_em_df.apply(lambda row: make_stock_data(row, target_date), axis=1)
+        pre_date = "2025-11-27"
+        previous_limit_up_stocks = get_previous_limit_up_stocks(pre_date)
+        previous_limit_up_df = pd.DataFrame(previous_limit_up_stocks)
+        print(previous_limit_up_df.shape)
+        previous_limit_up_df.apply(lambda row: make_stock_data(row, target_date), axis=1)
+        notify("完成")
+    except Exception as e:
+        print(f"运行异常: {e}")
+        notify("失败")
