@@ -7,8 +7,6 @@ import plotly.express as px
 import streamlit as st
 from sqlalchemy import create_engine
 
-DEFAULT_PLOTLY_CONFIG = {'displayModeBar': True, 'displaylogo': False}
-
 warnings.filterwarnings('ignore')
 
 
@@ -583,7 +581,7 @@ def main():
         )
         
         fig.update_layout(height=400)
-        st.plotly_chart(fig, width='stretch', config=DEFAULT_PLOTLY_CONFIG, key="continuous_height_chart")
+        st.plotly_chart(fig, key="continuous_height_chart")
     
     create_chart_with_date_filter("连板高度趋势", df, create_continuous_height_chart)
     
@@ -629,7 +627,7 @@ def main():
                 ticktext=_tickvals_5
             )
             fig_left.update_layout(height=400)
-            st.plotly_chart(fig_left, width='stretch', config=DEFAULT_PLOTLY_CONFIG, key="limit_up_counts_left")
+            st.plotly_chart(fig_left, key="limit_up_counts_left")
         with right_col:
             fig_right = px.line(
                 counts_df,
@@ -647,7 +645,7 @@ def main():
                 ticktext=_tickvals_5
             )
             fig_right.update_layout(height=400)
-            st.plotly_chart(fig_right, width='stretch', config=DEFAULT_PLOTLY_CONFIG, key="limit_up_counts_right")
+            st.plotly_chart(fig_right, key="limit_up_counts_right")
 
     create_chart_with_date_filter("涨停数量趋势", df, create_limit_up_counts_chart)
 
@@ -785,7 +783,7 @@ def main():
                                   '<extra></extra>'
                 )
                 fig.update_layout(height=400)
-                st.plotly_chart(fig, width='stretch', config=DEFAULT_PLOTLY_CONFIG, key=key)
+                st.plotly_chart(fig, key=key)
                 table_df = df_rates[['date', col, num_col, denom_col]].copy()
                 table_df.columns = ['日期', '晋级率(%)', '分子', '分母']
                 table_df['晋级率(%)'] = table_df['晋级率(%)'].round(2)
@@ -797,7 +795,7 @@ def main():
                 
                 # 创建可展开/收起的表格（移除key参数以兼容低版本Streamlit）
                 with st.expander("查看详细数据", expanded=st.session_state[expander_key]):
-                    st.dataframe(table_df, width='stretch', hide_index=True)
+                    st.dataframe(table_df, width="stretch", hide_index=True)
     
     create_chart_with_date_filter("晋级率趋势", df, create_advancement_rate_chart)
     
@@ -844,7 +842,7 @@ def main():
             ticktext=_tickvals_5
         )
         fig.update_layout(height=400)
-        st.plotly_chart(fig, width='stretch', config=DEFAULT_PLOTLY_CONFIG, key="success_rate_chart")
+        st.plotly_chart(fig, key="success_rate_chart")
     
     create_chart_with_date_filter("涨停率趋势", df, create_success_rate_chart)
     
@@ -883,7 +881,7 @@ def main():
                          annotation_text="悲观区间")
             
             fig.update_layout(height=400)
-            st.plotly_chart(fig, width='stretch', config=DEFAULT_PLOTLY_CONFIG, key="sentiment_chart")
+            st.plotly_chart(fig, key="sentiment_chart")
         else:
             st.info("暂无情绪指数数据")
     
@@ -928,7 +926,7 @@ def main():
                         ticktext=_tickvals_5
                     )
                     fig_premium.update_layout(height=400)
-                    st.plotly_chart(fig_premium, width='stretch', config=DEFAULT_PLOTLY_CONFIG, key="premium_combined_chart")
+                    st.plotly_chart(fig_premium, key="premium_combined_chart")
                     
                     # 显示统计摘要
                     col1, col2, col3, col4 = st.columns(4)
@@ -1011,7 +1009,7 @@ def main():
                 ticktext=_tickvals_5_o
             )
             fig_open_succ.update_layout(height=400)
-            st.plotly_chart(fig_open_succ, width='stretch', config=DEFAULT_PLOTLY_CONFIG, key="opening_premium_success_rate_chart_v2")
+            st.plotly_chart(fig_open_succ, key="opening_premium_success_rate_chart_v2")
         with col2:
             close_long = close_df.melt(id_vars=['date_str'], value_vars=['总成功率', '排除一字成功率'], var_name='类型', value_name='成功率(%)')
             fig_close_succ = px.line(
@@ -1031,7 +1029,7 @@ def main():
                 ticktext=_tickvals_5_c
             )
             fig_close_succ.update_layout(height=400)
-            st.plotly_chart(fig_close_succ, width='stretch', config=DEFAULT_PLOTLY_CONFIG, key="closing_premium_success_rate_chart_v2")
+            st.plotly_chart(fig_close_succ, key="closing_premium_success_rate_chart_v2")
 
     create_chart_with_date_filter("昨日涨停溢价成功率", df, create_yesterday_premium_success_charts)
 

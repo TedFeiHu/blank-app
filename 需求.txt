@@ -72,3 +72,49 @@ CREATE TABLE `stock_model` (
 
 ---
 1. "连板高度趋势" 中，在labels标签中加入 对应的股票代码和股票名称信息
+
+---
+
+
+新建脚本文件
+补充涨停板后下一个交易日的数据
+步骤：
+1. 获取涨停板数据 条件为 limit_up_days is not null
+2. 检查是否 存在 T+1 的数据 （date） 
+3. 不存在 ，则加入待补充列表（同时依据code分组）
+4。通过 df = ak.stock_zh_a_hist(symbol=symbol, period="daily", start_date=start_date, end_date=end_date, adjust="qfq") 获取历史交易日信息
+5. 再次检查第二个交易日是否存在于数据库 (因为存在周末或者节假日不开盘的情况)
+6. 不存在，则构建数据，插入数据库
+数据说明：
+stock_zh_a_hist 接口数据格式为
+```
+日期 object 交易日
+股票代码 object 不带市场标识的股票代码
+开盘 float64 开盘价
+收盘 float64 收盘价
+最高 float64 最高价
+最低 float64 最低价
+成交量 int64 注意单位: 手
+成交额 float64 注意单位: 元
+振幅 float64 注意单位: %
+涨跌幅 float64 注意单位: %
+涨跌额 float64 注意单位: 元
+换手率 float64 注意单位: %
+```
+字段映射:
+```
+date=日期
+price=收盘
+volume=成交量
+turnover_rate=换手率
+first_price=开盘
+last_price=收盘
+break_count=0
+dc_break_count=0
+amplitude=振幅
+events=[]
+
+code,name,market_capitalization,circulating_market_capitalization,real_circulating_capitalization,industry: 取自前交易日的数据
+limit_up_statistics： 在前交易日的数据上 将 '3/2' 这种模式的字符串第一个数字加1，结果 '4/2'
+real_turnover_rate: volume/real_circulating_capitalization %
+```
