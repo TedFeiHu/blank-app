@@ -24,7 +24,7 @@ def increment_first_number(pattern_str):
         return f"{first_num}/{parts[1]}"
     return None
 
-def get_limit_up_rows(engine):
+def get_limit_up_rows(engine, date):
     # 1. 获取涨停板数据 条件为 limit_up_days is not null
     q = text(
         """
@@ -32,12 +32,12 @@ def get_limit_up_rows(engine):
                market_capitalization, circulating_market_capitalization, real_circulating_capitalization,
                limit_up_statistics
         FROM stock_model
-        WHERE limit_up_days IS NOT NULL
+        WHERE limit_up_days IS NOT NULL and date != :date
         ORDER BY code, date
         """
     )
     with engine.begin() as conn:
-        df = pd.read_sql(q, conn)
+        df = pd.read_sql(q, conn, params={"date": date})
     logging.info("found limit-up rows: %d", len(df))
     return df
 
@@ -72,23 +72,31 @@ def check_next_day_exists_batch(engine, rows):
         next_cal_day = curr_date + pd.Timedelta(days=1)
         dates = existing_dates_map.get(code, set())
         
-        if next_cal_day not in dates:
-            missing_rows.append(row)
+        # 检查是否为周五
+        is_friday = pd.Timestamp(curr_date).weekday() == 4  # 0=周一, 4=周五
+        
+        # 如果是周五，检查下周一数据是否存在
+        if is_friday:
+            next_monday = curr_date + pd.Timedelta(days=3)  # 周五+3天=周一
+            # 如果下周一数据也不存在，才加入待补充列表
+            if next_cal_day not in dates and next_monday not in dates:
+                missing_rows.append(row)
+        else:
+            # 非周五情况，保持原逻辑
+            if next_cal_day not in dates:
+                missing_rows.append(row)
             
     logging.info("rows missing next trading day data: %d", len(missing_rows))
     return pd.DataFrame(missing_rows)
 
 def fetch_hist_data(code, start_date, end_date):
     symbol = code[-6:]
-    wait = random.randrange(20, 40)
+    wait = random.randrange(60, 90)
     logging.info("fetching %s [%s-%s], sleep %ds", symbol, start_date, end_date, wait)
     time.sleep(wait)
-    try:
-        df = ak.stock_zh_a_hist(symbol=symbol, period="daily", start_date=start_date, end_date=end_date, adjust="qfq")
-        return df
-    except Exception as e:
-        logging.error("fetch error for %s: %s", symbol, e)
-        return None
+    df = ak.stock_zh_a_hist(symbol=symbol, period="daily", start_date=start_date, end_date=end_date, adjust="qfq")
+    return df
+
 
 def process_missing_rows(engine, missing_df):
     # 3. 不存在 ，则加入待补充列表（同时依据code分组）
@@ -151,7 +159,7 @@ def process_missing_rows(engine, missing_df):
                 ).scalar()
                 
             if exists > 0:
-                logging.info("next day %s already exists for %s, skipping", target_date, code)
+                logging.info("%s next day %s already exists for %s, skipping", curr_date, target_date, code)
                 continue
                 
             # 6. 不存在，则构建数据，插入数据库
@@ -243,8 +251,8 @@ def main():
     dsn = "mysql+pymysql://dingteam_ops:GdTtsy1qNJ0RTfgceblzUFNLS2AH5qQi@mysql-tt.dingteam.com/dingteam_ops?charset=utf8mb4"
     engine = create_engine(dsn)
     
-    # 1. 获取涨停板数据
-    lu_rows = get_limit_up_rows(engine)
+    # 1. 获取涨停板数据, 排除今天的数据
+    lu_rows = get_limit_up_rows(engine, "2025-11-28")
     if lu_rows.empty:
         logging.info("no limit up rows found")
         return
