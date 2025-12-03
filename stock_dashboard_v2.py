@@ -75,9 +75,9 @@ def calculate_premium_rates(df):
         current_row = df_sorted.iloc[i]
         next_row = df_sorted.iloc[i + 1]
         
-        # 确保是同一只股票且日期连续
+        # 确保是同一只股票且是下一个交易日(不要求严格连续1天)
         if (current_row['code'] == next_row['code'] and 
-            pd.to_datetime(next_row['date']) - pd.to_datetime(current_row['date']) == pd.Timedelta(days=1) and
+            pd.to_datetime(next_row['date']) > pd.to_datetime(current_row['date']) and
             pd.notna(current_row['limit_up_days'])):  # 确保当天是涨停股票
             
             # 计算第二天开盘价溢价率 (这里用当日收盘价作为开盘价近似)
@@ -137,48 +137,153 @@ def get_daily_premium_stats(premium_df):
 
 def calculate_sentiment_value(df):
     """计算每日情绪值"""
-    daily_stats = []
+    # 先计算晋级率数据
+    dates = sorted(df['date'].unique())
+    advancement_data = {}
     
-    for date in df['date'].unique():
+    for i in range(1, len(dates)):
+        date = dates[i]
+        prev_date = dates[i-1]
+        today = df[df['date'] == date]
+        prev_day = df[df['date'] == prev_date]
+        
+        # 计算各梯队晋级率
+        d1 = (prev_day['limit_up_days'] == 1).sum()
+        n2 = (today['limit_up_days'] == 2).sum()
+        r12 = (n2 / d1 * 100) if d1 > 0 else 0
+        
+        d2 = (prev_day['limit_up_days'] == 2).sum()
+        n3 = (today['limit_up_days'] == 3).sum()
+        r23 = (n3 / d2 * 100) if d2 > 0 else 0
+        
+        d3 = (prev_day['limit_up_days'] == 3).sum()
+        n4 = (today['limit_up_days'] == 4).sum()
+        r34 = (n4 / d3 * 100) if d3 > 0 else 0
+        
+        d4 = (prev_day['limit_up_days'] == 4).sum()
+        n5 = (today['limit_up_days'] == 5).sum()
+        r45 = (n5 / d4 * 100) if d4 > 0 else 0
+        
+        d5p = (prev_day['limit_up_days'] >= 5).sum()
+        n6p = (today['limit_up_days'] >= 6).sum()
+        r5p6p = (n6p / d5p * 100) if d5p > 0 else 0
+        
+        # 计算整体晋级率
+        d_total = d1 + d2 + d3 + d4 + d5p
+        n_total = n2 + n3 + n4 + n5 + n6p
+        overall_rate = (n_total / d_total * 100) if d_total > 0 else 0
+        
+        advancement_data[date] = {
+            'overall_rate': overall_rate,
+            'rate_1_to_2': r12
+        }
+    
+    # 计算溢价率数据
+    premium_df = calculate_premium_rates(df)
+    premium_stats = {}
+    
+    if not premium_df.empty:
+        daily_premium = premium_df.groupby('date').agg({
+            'opening_premium_rate': 'mean',
+            'closing_premium_rate': 'mean'
+        }).round(2)
+        
+        for date, row in daily_premium.iterrows():
+            premium_stats[date] = {
+                'avg_opening_premium': row['opening_premium_rate'],
+                'avg_closing_premium': row['closing_premium_rate']
+            }
+    
+    # 计算每日情绪值
+    daily_stats = []
+    all_dates = sorted(df['date'].unique())
+    
+    for date in all_dates:
         day_data = df[df['date'] == date].copy()
         
+        # 1. 涨停强度指标
         # 涨停股票数量 (归一化到0-100)
         limit_up_count = len(day_data[day_data['limit_up_days'].notna()])
         max_count = df.groupby('date').size().max()
-        limit_up_score = min(100, (limit_up_count / max_count) * 100) * 0.3
+        limit_up_score = min(100, (limit_up_count / max_count) * 100) * 0.15
         
-        # 连板高度得分
+        # 2. 连板梯队指标
+        # 最高连板高度
         max_continuous = day_data['limit_up_days'].max()
         if pd.isna(max_continuous):
-            continuous_score = 0
+            continuous_height_score = 0
         else:
-            continuous_score = min(100, (max_continuous / 10) * 100) * 0.25
+            continuous_height_score = min(100, (max_continuous / 10) * 100) * 0.15
         
+        # 连板股票数量
+        continuous_stocks_count = len(day_data[day_data['limit_up_days'] >= 2])
+        max_continuous_count = df[df['limit_up_days'] >= 2].groupby('date').size().max() if len(df[df['limit_up_days'] >= 2]) > 0 else 1
+        continuous_stocks_score = min(100, (continuous_stocks_count / max_continuous_count) * 100) * 0.10
+        
+        # 3. 晋级效应指标
+        overall_rate = advancement_data[date]['overall_rate'] if date in advancement_data else 0
+        overall_rate_score = min(100, overall_rate) * 0.15
+        
+        rate_1_to_2 = advancement_data[date]['rate_1_to_2'] if date in advancement_data else 0
+        rate_1_to_2_score = min(100, rate_1_to_2) * 0.10
+        
+        # 4. 封板质量指标
         # 封板成功率
-        total_stocks = len(day_data[day_data['limit_up_days'].notna()])
-        if total_stocks > 0:
+        total_limit_up = len(day_data[day_data['limit_up_days'].notna()])
+        if total_limit_up > 0:
             success_count = len(day_data[(day_data['limit_up_days'].notna()) & (day_data['break_count'] == 0)])
-            success_rate = (success_count / total_stocks) * 100
+            success_rate = (success_count / total_limit_up) * 100
         else:
             success_rate = 0
-        success_score = success_rate * 0.25
+        success_score = success_rate * 0.10
         
-        # 换手率活跃度得分
-        avg_turnover = day_data['real_turnover_rate'].mean()
-        if pd.isna(avg_turnover):
-            turnover_score = 0
+        # 炸板率
+        touched_limit = len(day_data[day_data['limit_up_days'].notna()])
+        if touched_limit > 0:
+            # 炸板股票数 = 有炸板记录且炸板次数>0的股票数
+            break_stocks = len(day_data[(day_data['limit_up_days'].notna()) & (day_data['break_count'] > 0)])
+            break_rate = (break_stocks / touched_limit) * 100 if touched_limit > 0 else 0
         else:
-            turnover_score = min(100, avg_turnover * 2) * 0.2
+            break_rate = 0
+        # 炸板率越高，得分越低
+        break_rate_score = (100 - min(100, break_rate)) * 0.10
         
-        sentiment_value = limit_up_score + continuous_score + success_score + turnover_score
+        # 5. 赚钱效应指标
+        avg_opening_premium = premium_stats[date]['avg_opening_premium'] if date in premium_stats else 0
+        # 溢价率转换为0-100分，假设合理区间为-5%到10%
+        opening_premium_score = min(100, max(0, (avg_opening_premium + 5) / 15 * 100)) * 0.10
+        
+        avg_closing_premium = premium_stats[date]['avg_closing_premium'] if date in premium_stats else 0
+        closing_premium_score = min(100, max(0, (avg_closing_premium + 5) / 15 * 100)) * 0.05
+        
+        # 计算总情绪值
+        sentiment_value = (
+            limit_up_score + 
+            continuous_height_score + 
+            continuous_stocks_score +
+            overall_rate_score +
+            rate_1_to_2_score +
+            success_score +
+            break_rate_score +
+            opening_premium_score +
+            closing_premium_score
+        )
+        
+        # 确保情绪值在0-100之间
+        sentiment_value = max(0, min(100, sentiment_value))
         
         daily_stats.append({
             'date': pd.to_datetime(date).date(),
             'sentiment_value': sentiment_value,
             'limit_up_count': limit_up_count,
             'max_continuous': max_continuous if pd.notna(max_continuous) else 0,
+            'continuous_stocks_count': continuous_stocks_count,
+            'overall_advancement_rate': advancement_data[date]['overall_rate'] if date in advancement_data else 0,
+            'rate_1_to_2': advancement_data[date]['rate_1_to_2'] if date in advancement_data else 0,
             'success_rate': success_rate,
-            'avg_turnover': avg_turnover if pd.notna(avg_turnover) else 0
+            'break_rate': break_rate,
+            'avg_opening_premium': avg_opening_premium,
+            'avg_closing_premium': avg_closing_premium
         })
     
     return pd.DataFrame(daily_stats)
@@ -856,13 +961,53 @@ def main():
             _tickvals_5 = [_ticks[i] for i in range(0, len(_ticks), 5)]
             if len(_ticks) > 0 and _ticks[-1] not in _tickvals_5:
                 _tickvals_5.append(_ticks[-1])
+            
+            # 添加情绪状态标签
+            def get_sentiment_label(value):
+                if value >= 85:
+                    return "极度乐观"
+                elif value >= 70:
+                    return "谨慎乐观"
+                elif value >= 50:
+                    return "中性"
+                elif value >= 30:
+                    return "谨慎悲观"
+                else:
+                    return "极度悲观"
+            
+            sentiment_filtered['sentiment_label'] = sentiment_filtered['sentiment_value'].apply(get_sentiment_label)
+            
+            # 创建情绪指数图表
             fig = px.line(
                 sentiment_filtered,
                 x='date_str',
                 y='sentiment_value',
                 title='每日市场情绪指数',
-                labels={'date_str': '日期', 'sentiment_value': '情绪值'}
+                labels={'date_str': '日期', 'sentiment_value': '情绪值'},
+                hover_data={
+                    'date_str': True,
+                    'sentiment_value': ':.2f',
+                    'sentiment_label': True,
+                    'limit_up_count': True,
+                    'max_continuous': True,
+                    'overall_advancement_rate': ':.1f',
+                    'avg_opening_premium': ':.2f'
+                }
             )
+            
+            # 自定义悬停模板
+            fig.update_traces(
+                hovertemplate='<b>日期:</b> %{x}<br>' +
+                             '<b>情绪值:</b> %{y:.2f}<br>' +
+                             '<b>情绪状态:</b> %{customdata[0]}<br>' +
+                             '<b>涨停数量:</b> %{customdata[1]}<br>' +
+                             '<b>最高连板:</b> %{customdata[2]}<br>' +
+                             '<b>整体晋级率:</b> %{customdata[3]:.1f}%<br>' +
+                             '<b>平均开盘溢价率:</b> %{customdata[4]:.2f}%<br>' +
+                             '<extra></extra>',
+                customdata=sentiment_filtered[['sentiment_label', 'limit_up_count', 'max_continuous', 'overall_advancement_rate', 'avg_opening_premium']]
+            )
+            
             fig.update_xaxes(
                 type='category',
                 categoryorder='array',
@@ -872,16 +1017,101 @@ def main():
                 ticktext=_tickvals_5
             )
             
-            # 添加情绪值区间标注
-            fig.add_hline(y=80, line_dash="dash", line_color="green", 
-                         annotation_text="乐观区间")
-            fig.add_hline(y=50, line_dash="dash", line_color="yellow", 
-                         annotation_text="中性区间")
-            fig.add_hline(y=20, line_dash="dash", line_color="red", 
-                         annotation_text="悲观区间")
+            # 添加情绪值区间标注和背景色
+            fig.add_hrect(y0=85, y1=100, fillcolor="green", opacity=0.1, line_width=0, annotation_text="极度乐观")
+            fig.add_hrect(y0=70, y1=85, fillcolor="lightgreen", opacity=0.1, line_width=0, annotation_text="谨慎乐观")
+            fig.add_hrect(y0=50, y1=70, fillcolor="yellow", opacity=0.1, line_width=0, annotation_text="中性")
+            fig.add_hrect(y0=30, y1=50, fillcolor="orange", opacity=0.1, line_width=0, annotation_text="谨慎悲观")
+            fig.add_hrect(y0=0, y1=30, fillcolor="red", opacity=0.1, line_width=0, annotation_text="极度悲观")
             
-            fig.update_layout(height=400)
+            # 添加情绪值参考线
+            fig.add_hline(y=85, line_dash="dash", line_color="darkgreen", annotation_text="极度乐观")
+            fig.add_hline(y=70, line_dash="dash", line_color="green", annotation_text="谨慎乐观")
+            fig.add_hline(y=50, line_dash="dash", line_color="yellow", annotation_text="中性")
+            fig.add_hline(y=30, line_dash="dash", line_color="orange", annotation_text="谨慎悲观")
+            fig.add_hline(y=15, line_dash="dash", line_color="red", annotation_text="极度悲观")
+            
+            # 添加移动平均线
+            sentiment_filtered['ma5_sentiment'] = sentiment_filtered['sentiment_value'].rolling(window=5).mean()
+            sentiment_filtered['ma10_sentiment'] = sentiment_filtered['sentiment_value'].rolling(window=10).mean()
+            
+            fig.add_scatter(
+                x=sentiment_filtered['date_str'],
+                y=sentiment_filtered['ma5_sentiment'],
+                name='5日情绪均线',
+                line=dict(dash='dash', color='blue'),
+                opacity=0.7
+            )
+            
+            fig.add_scatter(
+                x=sentiment_filtered['date_str'],
+                y=sentiment_filtered['ma10_sentiment'],
+                name='10日情绪均线',
+                line=dict(dash='dash', color='purple'),
+                opacity=0.7
+            )
+            
+            fig.update_layout(
+                height=500,
+                legend=dict(
+                    yanchor="top",
+                    y=0.99,
+                    xanchor="left",
+                    x=0.01
+                )
+            )
+            
             st.plotly_chart(fig, key="sentiment_chart")
+            
+            # 显示情绪指数统计摘要
+            st.subheader("📊 情绪指数统计摘要")
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                avg_sentiment = sentiment_filtered['sentiment_value'].mean()
+                st.metric("平均情绪值", f"{avg_sentiment:.1f}")
+            
+            with col2:
+                max_sentiment = sentiment_filtered['sentiment_value'].max()
+                max_date = sentiment_filtered[sentiment_filtered['sentiment_value'] == max_sentiment]['date'].iloc[0]
+                st.metric("最高情绪值", f"{max_sentiment:.1f}", f"日期: {max_date}")
+            
+            with col3:
+                min_sentiment = sentiment_filtered['sentiment_value'].min()
+                min_date = sentiment_filtered[sentiment_filtered['sentiment_value'] == min_sentiment]['date'].iloc[0]
+                st.metric("最低情绪值", f"{min_sentiment:.1f}", f"日期: {min_date}")
+            
+            with col4:
+                current_sentiment = sentiment_filtered['sentiment_value'].iloc[-1]
+                current_label = sentiment_filtered['sentiment_label'].iloc[-1]
+                st.metric("最新情绪值", f"{current_sentiment:.1f}", f"状态: {current_label}")
+            
+            # 显示情绪状态分布
+            st.subheader("📊 情绪状态分布")
+            label_counts = sentiment_filtered['sentiment_label'].value_counts().reset_index()
+            label_counts.columns = ['情绪状态', '天数']
+            
+            # 按情绪强度排序
+            label_order = ['极度乐观', '谨慎乐观', '中性', '谨慎悲观', '极度悲观']
+            label_counts['情绪状态'] = pd.Categorical(label_counts['情绪状态'], categories=label_order, ordered=True)
+            label_counts = label_counts.sort_values('情绪状态')
+            
+            fig_pie = px.pie(
+                label_counts,
+                values='天数',
+                names='情绪状态',
+                title='情绪状态分布',
+                color_discrete_map={
+                    '极度乐观': 'darkgreen',
+                    '谨慎乐观': 'lightgreen',
+                    '中性': 'yellow',
+                    '谨慎悲观': 'orange',
+                    '极度悲观': 'red'
+                }
+            )
+            
+            fig_pie.update_layout(height=400)
+            st.plotly_chart(fig_pie, key="sentiment_distribution_chart")
         else:
             st.info("暂无情绪指数数据")
     

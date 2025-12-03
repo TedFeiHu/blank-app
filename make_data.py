@@ -683,7 +683,7 @@ def get_previous_limit_up_stocks(date):
 
 if __name__ == "__main__":
     try:
-        raw_date = '20251128'
+        raw_date = '20251203'
         target_date = f"{raw_date[:4]}-{raw_date[4:6]}-{raw_date[6:]}"
         stock_zt_pool_zbgc_em_df = ak.stock_zt_pool_zbgc_em(date=raw_date)
         print(stock_zt_pool_zbgc_em_df.shape)
@@ -691,7 +691,7 @@ if __name__ == "__main__":
         stock_zt_pool_em_df = ak.stock_zt_pool_em(date=raw_date)
         print(stock_zt_pool_em_df.shape)
         stock_zt_pool_em_df.apply(lambda row: make_stock_data(row, target_date), axis=1)
-        pre_date = "2025-11-27"
+        pre_date = "2025-12-02"
         previous_limit_up_stocks = get_previous_limit_up_stocks(pre_date)
         previous_limit_up_df = pd.DataFrame(previous_limit_up_stocks)
         print(previous_limit_up_df.shape)
